@@ -1,0 +1,10 @@
+name: iosrealrun
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - -c constraints-legacy.txt
+      - -r requirements-legacy.txt

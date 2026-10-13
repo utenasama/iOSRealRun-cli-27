@@ -1,7 +1,9 @@
-from pymobiledevice3.cli.developer import LocationSimulation
+# SPDX-License-Identifier: MPL-2.0
+# GPL-3.0-or-later combination: see LICENSING.md.
+import asyncio
 
-def set_location(dvt, lat: float, lng: float):
-    LocationSimulation(dvt).set(lat, lng)
+async def set_location(simulation, lat: float, lng: float):
+    await asyncio.wait_for(simulation.set(lat, lng), timeout=10)
 
-def clear_location(dvt):
-    LocationSimulation(dvt).clear()
+async def clear_location(simulation):
+    await asyncio.wait_for(simulation.clear(), timeout=10)

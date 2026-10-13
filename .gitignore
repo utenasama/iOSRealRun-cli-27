@@ -1,3 +1,14 @@
 .vscode/
 
 __pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+*.log
+.venv/
+.conda/
+.pymobiledevice3/
+DeveloperDiskImage/
+SETUP.txt
+SETUP-legacy.txt

@@ -1,36 +1,23 @@
-import sys
-import ctypes
-import os
+# SPDX-License-Identifier: MPL-2.0
+# GPL-3.0-or-later combination: see LICENSING.md.
+"""Check the connected device without changing its settings."""
+from dataclasses import dataclass
 
 from driver import connect
 
-def init():
-    # check if root on mac or Administrator on windows
-    if sys.platform == "win32":
-        if not ctypes.windll.shell32.IsUserAnAdmin():
-            print("请以管理员权限运行")
-            sys.exit(1)
-    elif sys.platform == "darwin":
-        if os.geteuid() != 0:
-            print("请以root权限运行")
-            sys.exit(1)
-    else:
-        print("仅支持macOS和Windows")
-        sys.exit(1)
 
-    # get lockdown client
-    lockdown = connect.get_usbmux_lockdownclient()
+@dataclass(frozen=True)
+class Device:
+    serial: str
+    product_type: str
+    version: str
 
-    # check version
-    version = connect.get_version(lockdown)
-    print(f"Your system version is {version}")
-    if version.split(".")[0] < "17":
-        print(f"仅支持17及以上版本")
-        sys.exit(1)
 
-    # check developer mode status
-    developer_mode_status = connect.get_developer_mode_status(lockdown)
-    if not developer_mode_status:
-        connect.reveal_developer_mode(lockdown)
-        print("您未开启开发者模式，请打开设备的 设置-隐私与安全性-开发者模式 来开启，开启后需要重启并输入密码，完成后再次运行此程序")
-        sys.exit(1)
+async def init(serial=None):
+    async with await connect.get_usbmux_lockdownclient(serial) as lockdown:
+        version = lockdown.product_version
+        if int(version.split(".")[0]) < 17:
+            raise RuntimeError("本项目需要 iOS 17 或更高版本")
+        if not await lockdown.get_developer_mode_status():
+            raise RuntimeError("请在手机的 设置 → 隐私与安全性 中开启开发者模式")
+        return Device(lockdown.udid, lockdown.all_values["ProductType"], version)

@@ -1,9 +1,12 @@
+# SPDX-License-Identifier: MPL-2.0
+# GPL-3.0-or-later combination: see LICENSING.md.
 """
 run.py
 automatically run the route
 """
 
-"""修正坐标误差，百度取点使用 BD-09 坐标系，iOS使用 WGS-09 坐标系，进行转换"""
+"""修正坐标误差，百度取点使用 BD-09 坐标系，iOS使用 WGS-84 坐标系，进行转换"""
+import asyncio
 import math
 import time
 import random
@@ -134,22 +137,46 @@ def fixLockT(loc: list, v, dt):
             t += dt
     return fixedLoc
 
-def run1(dvt, loc: list, v, dt=0.2):
+async def run1(simulation, loc: list, v, dt=0.2, *, until=None, randomize=True):
     fixedLoc = fixLockT(loc, v, dt)
-    nList = (5, 6, 7, 8, 9)
-    n = nList[random.randint(0, len(nList)-1)]
-    fixedLoc = randLoc(fixedLoc, n=n)  # a path will be divided into n parts for random route
-    clock = time.time()
+    if randomize:
+        fixedLoc = randLoc(fixedLoc, n=random.randint(5, 9))
+    loop = asyncio.get_running_loop()
+    next_tick = loop.time()
+    updates = 0
     for i in fixedLoc:
-        # utils.setLoc(bd09Towgs84(i))
-        location.set_location(dvt, **bd09Towgs84(i))
-        while time.time()-clock < dt:
-            pass
-        clock = time.time()
+        if until is not None and loop.time() >= until:
+            break
+        await location.set_location(simulation, **bd09Towgs84(i))
+        updates += 1
+        next_tick = max(next_tick + dt, loop.time())
+        delay = max(0, next_tick - loop.time())
+        if until is not None:
+            delay = min(delay, max(0, until - loop.time()))
+        await asyncio.sleep(delay)
+    return updates
 
-def run(dvt, loc: list, v, d=15):
-    random.seed(time.time())
-    while True:
-        vRand = 1000/(1000/v-(2*random.random()-1)*d)
-        run1(dvt, loc, vRand)
-        print("跑完一圈了")
+async def run(simulation, loc: list, v, d=15, *, duration=None, laps=None, randomize=True):
+    if not math.isfinite(v) or v <= 0:
+        raise ValueError("速度必须为正数")
+    if duration is not None and (not math.isfinite(duration) or duration <= 0):
+        raise ValueError("运行时长必须为正数")
+    if laps is not None and laps < 1:
+        raise ValueError("圈数必须为正整数")
+    loop = asyncio.get_running_loop()
+    until = None if duration is None else loop.time() + duration
+    completed = updates = 0
+    while laps is None or completed < laps:
+        if until is not None and loop.time() >= until:
+            break
+        jitter = min(d, 0.9 * 1000 / v)
+        speed = 1000 / (1000 / v - random.uniform(-jitter, jitter)) if randomize else v
+        count = await run1(simulation, loc, speed, until=until, randomize=randomize)
+        updates += count
+        if until is not None and loop.time() >= until:
+            break
+        if not count:
+            raise ValueError("路线没有可运行的距离，请检查坐标点")
+        completed += 1
+        print(f"跑完第 {completed} 圈", flush=True)
+    return updates

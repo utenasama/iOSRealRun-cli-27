@@ -1,0 +1,5 @@
+# Legacy environment only; do not apply these pins to pymobiledevice3 11.x.
+# pymobiledevice3 2.46.1 imports qh3.quic.packet_builder, removed by newer qh3.
+qh3==0.11.5
+# pymobiledevice3 2.46.1 expects the old ipsw_parser.img4 module.
+ipsw-parser==1.1.2

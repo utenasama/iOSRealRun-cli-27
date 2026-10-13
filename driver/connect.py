@@ -1,55 +1,18 @@
-import logging
-import multiprocessing
-
-from pymobiledevice3.lockdown import create_using_usbmux, LockdownClient
-
-from pymobiledevice3.cli.remote import install_driver_if_required
-from pymobiledevice3.cli.remote import select_device, RemoteServiceDiscoveryService
-from pymobiledevice3.cli.remote import start_tunnel
-from pymobiledevice3.cli.remote import verify_tunnel_imports
-
-from pymobiledevice3.services.amfi import AmfiService
-
-from pymobiledevice3.exceptions import NoDeviceConnectedError
-
-def get_usbmux_lockdownclient():
-    while True:
-        try:
-            lockdown = create_using_usbmux()
-        except NoDeviceConnectedError:
-            print("请连接设备后按回车...")
-            input()
-        else:
-            break
-    while True:
-        lockdown = create_using_usbmux()
-        if lockdown.all_values.get("PasswordProtected"):
-            print("请解锁设备后按回车...")
-            input()
-        else:
-            break
-    return create_using_usbmux()
-
-def get_version(lockdown: LockdownClient):
-    return lockdown.all_values.get("ProductVersion")
-
-def get_developer_mode_status(lockdown: LockdownClient):
-    return lockdown.developer_mode_status
-
-def reveal_developer_mode(lockdown: LockdownClient):
-    AmfiService(lockdown).create_amfi_show_override_path_file()
-
-def enable_developer_mode(lockdown: LockdownClient):
-    AmfiService(lockdown).enable_developer_mode()
-
-def get_serverrsd():
-    install_driver_if_required()
-    if not verify_tunnel_imports():
-        exit(1)
-    return select_device(None)
+# SPDX-License-Identifier: MPL-2.0
+# GPL-3.0-or-later combination: see LICENSING.md.
+"""USB discovery and pairing for the async pymobiledevice3 API."""
+from pymobiledevice3.lockdown import create_using_usbmux
+from pymobiledevice3.usbmux import list_devices
 
 
-async def tunnel(rsd: RemoteServiceDiscoveryService, queue: multiprocessing.Queue):
-    async with start_tunnel(rsd, None) as tunnel_result:
-        queue.put((tunnel_result.address, tunnel_result.port))
-        await tunnel_result.client.wait_closed()
+async def get_usbmux_lockdownclient(serial=None):
+    devices = [device for device in await list_devices() if device.is_usb]
+    if serial is not None:
+        devices = [device for device in devices if device.matches_udid(serial)]
+    if not devices:
+        raise RuntimeError("未发现 USB 设备，请连接手机、解锁并信任此电脑")
+    if len(devices) != 1:
+        raise RuntimeError("请只连接一台手机，或用 --udid 指定设备")
+    return await create_using_usbmux(
+        serial=devices[0].serial, connection_type="USB", pair_timeout=15,
+    )
